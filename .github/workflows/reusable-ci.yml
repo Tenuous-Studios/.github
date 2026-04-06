@@ -1,29 +1,64 @@
-# FILE: my-org/.github/.github/workflows/reusable-ci.yml
+# FILE: Tenuous-Studios/.github/.github/workflows/reusable-ci.yml
 name: Reusable Organization CI
 
 on:
   workflow_call:
-    # Optional: Define inputs if you want to toggle features per repo
     inputs:
+      language:
+        description: 'Language for CodeQL (e.g., javascript, python)'
+        default: 'javascript'
+        required: false
+        type: string
       run-docs:
+        description: 'Whether to build and deploy docs'
+        default: false
+        required: false
         type: boolean
-        default: true
 
 jobs:
-  quality:
+  analyze:
+    name: Security Scan (CodeQL)
     runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
     steps:
-      - uses: actions/checkout@v4
-      - name: Security Scan
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
         uses: github/codeql-action/init@v4
         with:
-          languages: 'javascript'
-      - uses: github/codeql-action/analyze@v3
+          languages: ${{ inputs.language }}
 
-  docs:
+      - name: Perform Analysis
+        uses: github/codeql-action/analyze@v3
+
+  deploy-docs:
+    name: Build & Deploy Docs
+    needs: analyze
     if: inputs.run-docs && github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: quality
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
     steps:
-      - uses: actions/checkout@v4
-      - run: echo "Deploying docs..."
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build Docs
+        run: |
+          mkdir -p ./public
+          # Customize this: e.g., cp README.md ./public/index.md
+          echo "Documentation built on $(date)" > ./public/index.html
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./public
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

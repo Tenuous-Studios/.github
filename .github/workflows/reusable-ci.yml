@@ -5,17 +5,27 @@ on:
   workflow_call:
     inputs:
       language:
-        description: 'CodeQL language (e.g., javascript, python, go, java, csharp, ruby, cpp)'
+        description: 'Target language (e.g., gdscript, javascript, python, go, java, csharp, ruby, cpp)'
         required: true
         type: string
       run-docs:
         description: 'Whether to build and deploy docs'
         default: false
-        required: false
         type: boolean
 
 jobs:
-  # NEW: Check if the language exists in the repo to avoid Exit Code 32
+  godot-checks:
+    if: inputs.language == 'gdscript'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install GDScript Toolkit
+        uses: Scony/godot-gdscript-toolkit@master
+      - name: Lint and Format
+        run: |
+          gdformat --check .
+          gdlint .
+
   check-language:
     runs-on: ubuntu-latest
     outputs:
@@ -64,7 +74,6 @@ jobs:
 
   deploy-docs:
     name: Build & Deploy Docs
-    needs: check-language
     if: inputs.run-docs && github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:

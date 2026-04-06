@@ -5,9 +5,8 @@ on:
   workflow_call:
     inputs:
       language:
-        description: 'Language for CodeQL (e.g., javascript, python)'
-        default: 'javascript'
-        required: false
+        description: 'CodeQL language (e.g., javascript, python, go, java, csharp, ruby, cpp)'
+        required: true
         type: string
       run-docs:
         description: 'Whether to build and deploy docs'
@@ -16,8 +15,36 @@ on:
         type: boolean
 
 jobs:
+  # NEW: Check if the language exists in the repo to avoid Exit Code 32
+  check-language:
+    runs-on: ubuntu-latest
+    outputs:
+      exists: ${{ steps.check.outputs.exists }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: check
+        shell: bash
+        run: |
+          LANG="${{ inputs.language }}"
+          # Map CodeQL languages to common file extensions
+          declare -A ext_map=( ["javascript"]="js|ts|jsx|tsx" ["python"]="py" ["go"]="go" ["java"]="java" ["csharp"]="cs" ["cpp"]="cpp|c|hpp|h" ["ruby"]="rb" )
+          EXT=${ext_map[$LANG]}
+          
+          if [ -z "$EXT" ]; then
+            echo "Unknown language mapping for $LANG. Defaulting to 'true' to attempt scan."
+            echo "exists=true" >> $GITHUB_OUTPUT
+          elif find . -maxdepth 5 -type f | grep -E "\.($EXT)$" > /dev/null; then
+            echo "Found $LANG files. Proceeding with scan."
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "No $LANG files found. Skipping scan."
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+          
   analyze:
     name: Security Scan (CodeQL)
+    needs: check-language
+    if: needs.check-language.outputs.exists == 'true' # Skip if no code found
     runs-on: ubuntu-latest
     permissions:
       security-events: write
@@ -37,7 +64,7 @@ jobs:
 
   deploy-docs:
     name: Build & Deploy Docs
-    needs: analyze
+    needs: check-language
     if: inputs.run-docs && github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:

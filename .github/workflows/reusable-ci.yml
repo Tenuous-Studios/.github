@@ -1,21 +1,58 @@
-# FILE: Tenuous-Studios/.github/.github/workflows/reusable-ci.yml
 name: Reusable Organization CI
 
 on:
   workflow_call:
     inputs:
       language:
-        description: 'Target language (e.g., gdscript, javascript, python, go, java, csharp, ruby, cpp)'
+        description: 'Target language (e.g., gdscript, javascript, python, etc.)'
         required: true
         type: string
       run-docs:
-        description: 'Whether to build and deploy docs'
         default: false
         type: boolean
 
 jobs:
+  check-language:
+    runs-on: ubuntu-latest
+    outputs:
+      mode: ${{ steps.check.outputs.mode }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: check
+        shell: bash
+        run: |
+          LANG="${{ inputs.language }}"
+          
+          # 1. Handle Godot specifically
+          if [ "$LANG" == "gdscript" ]; then
+            if find . -maxdepth 5 -type f -name "*.gd" | grep . > /dev/null; then
+              echo "mode=gdscript" >> $GITHUB_OUTPUT
+              exit 0
+            else
+              echo "::error::No .gd files found for language: gdscript"
+              exit 1
+            fi
+          fi
+
+          # 2. Handle CodeQL languages
+          declare -A ext_map=( ["javascript"]="js|ts|jsx|tsx" ["python"]="py" ["go"]="go" ["java"]="java" ["csharp"]="cs" ["cpp"]="cpp|c|hpp|h" ["ruby"]="rb" )
+          EXT=${ext_map[$LANG]}
+
+          if [ -n "$EXT" ]; then
+            if find . -maxdepth 5 -type f | grep -E "\.($EXT)$" > /dev/null; then
+              echo "mode=codeql" >> $GITHUB_OUTPUT
+            else
+              echo "::error::No files found for CodeQL language: $LANG"
+              exit 1
+            fi
+          else
+            echo "::error::Language '$LANG' is not supported by this workflow (expected gdscript or CodeQL languages)."
+            exit 1
+          fi
+
   godot-checks:
-    if: inputs.language == 'gdscript'
+    needs: check-language
+    if: needs.check-language.outputs.mode == 'gdscript'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,75 +63,41 @@ jobs:
           gdformat --check .
           gdlint .
 
-  check-language:
-    runs-on: ubuntu-latest
-    outputs:
-      exists: ${{ steps.check.outputs.exists }}
-    steps:
-      - uses: actions/checkout@v4
-      - id: check
-        shell: bash
-        run: |
-          LANG="${{ inputs.language }}"
-          # Map CodeQL languages to common file extensions
-          declare -A ext_map=( ["javascript"]="js|ts|jsx|tsx" ["python"]="py" ["go"]="go" ["java"]="java" ["csharp"]="cs" ["cpp"]="cpp|c|hpp|h" ["ruby"]="rb" )
-          EXT=${ext_map[$LANG]}
-          
-          if [ -z "$EXT" ]; then
-            echo "Unknown language mapping for $LANG. Defaulting to 'true' to attempt scan."
-            echo "exists=true" >> $GITHUB_OUTPUT
-          elif find . -maxdepth 5 -type f | grep -E "\.($EXT)$" > /dev/null; then
-            echo "Found $LANG files. Proceeding with scan."
-            echo "exists=true" >> $GITHUB_OUTPUT
-          else
-            echo "No $LANG files found. Skipping scan."
-            echo "exists=false" >> $GITHUB_OUTPUT
-          fi
-          
   analyze:
     name: Security Scan (CodeQL)
     needs: check-language
-    if: needs.check-language.outputs.exists == 'true' # Skip if no code found
+    if: needs.check-language.outputs.mode == 'codeql'
     runs-on: ubuntu-latest
     permissions:
       security-events: write
       actions: read
       contents: read
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@v4
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v4
         with:
           languages: ${{ inputs.language }}
-
-      - name: Perform Analysis
-        uses: github/codeql-action/analyze@v4
+      - uses: github/codeql-action/analyze@v4
 
   deploy-docs:
     name: Build & Deploy Docs
-    if: inputs.run-docs && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [godot-checks, analyze]
+    # Runs if docs are requested AND the active test job passed (or was correctly skipped)
+    if: |
+      always() && inputs.run-docs && 
+      github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+      (needs.godot-checks.result == 'success' || needs.analyze.result == 'success')
     runs-on: ubuntu-latest
     permissions:
       contents: read
       pages: write
       id-token: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Build Docs
-        run: |
+      - uses: actions/checkout@v4
+      - run: |
           mkdir -p ./public
-          # Customize this: e.g., cp README.md ./public/index.md
           echo "Documentation built on $(date)" > ./public/index.html
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v3
         with:
           path: ./public
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - uses: actions/deploy-pages@v4

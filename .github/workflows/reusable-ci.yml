@@ -1,0 +1,29 @@
+# FILE: my-org/.github/.github/workflows/reusable-ci.yml
+name: Reusable Organization CI
+
+on:
+  workflow_call:
+    # Optional: Define inputs if you want to toggle features per repo
+    inputs:
+      run-docs:
+        type: boolean
+        default: true
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Security Scan
+        uses: github/codeql-action/init@v3
+        with:
+          languages: 'javascript'
+      - uses: github/codeql-action/analyze@v3
+
+  docs:
+    if: inputs.run-docs && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "Deploying docs..."

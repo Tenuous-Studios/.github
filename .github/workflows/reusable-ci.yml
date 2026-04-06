@@ -63,21 +63,20 @@ jobs:
       - name: Run Quality Checks
         shell: bash
         run: |
-          # 1. Run Linting
+          # 1. Run Linting (Redirecting stderr to stdout with 2>&1)
           set +e
-          LINT_OUTPUT=$(gdlint .)
+          LINT_OUTPUT=$(gdlint . 2>&1)
           LINT_EXIT_CODE=$?
           
-          # 2. Run Formatting Check
-          FORMAT_OUTPUT=$(gdformat --check .)
+          # 2. Run Formatting Check (Redirecting stderr to stdout with 2>&1)
+          FORMAT_OUTPUT=$(gdformat --check . 2>&1)
           FORMAT_EXIT_CODE=$?
           set -e
 
           # 3. Process Linting Results
           if [ $LINT_EXIT_CODE -ne 0 ]; then
-            echo "::error::GDScript linting issues detected. See Job Summary for details."
+            echo "::error::GDScript linting issues detected."
             echo "### ⚠️ GDScript Linting Violations" >> $GITHUB_STEP_SUMMARY
-            echo "The following code quality issues were found:" >> $GITHUB_STEP_SUMMARY
             echo '```text' >> $GITHUB_STEP_SUMMARY
             echo "$LINT_OUTPUT" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
@@ -85,9 +84,8 @@ jobs:
 
           # 4. Process Formatting Results
           if [ $FORMAT_EXIT_CODE -ne 0 ]; then
-            echo "::error::GDScript formatting issues detected. Run 'gdformat .' locally."
+            echo "::error::GDScript formatting issues detected."
             echo "### ❌ GDScript Formatting Error" >> $GITHUB_STEP_SUMMARY
-            echo "The following files do not match the required style:" >> $GITHUB_STEP_SUMMARY
             echo '```text' >> $GITHUB_STEP_SUMMARY
             echo "$FORMAT_OUTPUT" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
@@ -97,8 +95,7 @@ jobs:
           if [ $LINT_EXIT_CODE -ne 0 ] || [ $FORMAT_EXIT_CODE -ne 0 ]; then
             echo "---" >> $GITHUB_STEP_SUMMARY
             echo "#### 🛠️ How to Fix" >> $GITHUB_STEP_SUMMARY
-            echo "To resolve these issues, run the following commands in your project folder:" >> $GITHUB_STEP_SUMMARY
-            echo '`pip install gdtoolkit && gdformat . && gdlint .`' >> $GITHUB_STEP_SUMMARY
+            echo "Run: \`pip install gdtoolkit && gdformat . && gdlint .\`" >> $GITHUB_STEP_SUMMARY
             exit 1
           fi
 

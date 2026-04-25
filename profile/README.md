@@ -7,7 +7,7 @@
 Welcome to the un-official GitHub organization for **Tenuous Studios**. We are a team of that likes to pretend we are making games.
 
 ### What We're Building
-- 🧩 **Flipsaw**: Our flagship title, currently in ![Static Badge](https://img.shields.io/badge/Prototype-blue)
+- 🧩 **Flipsaw**: Our flagship title ![Static Badge](https://img.shields.io/badge/build-protype-blue)
 - 🔧 **Internal Tools**: We got none, so go away.
 
 ### Current Focus
